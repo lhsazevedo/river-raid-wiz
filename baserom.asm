@@ -439,11 +439,11 @@ MainLoop:
        AND    #$1F              ; 2
        STA    blockLine         ; 3
        LSR    blockLine         ; 5             0..15
-       CMP    #26               ; 2
-       BCC    lowOffset         ; 2
-       SBC    #22               ; 2
-       BNE    endOffset         ; 2
-
+       CMP    #26               ; 2             ; Is it >= 26?
+       BCC    lowOffset         ; 2             ; Yes, go to lowOffset
+       SBC    #22               ; 2             ; No, sub 22
+       BNE    endOffset         ; 2             ; Go to endOffset if == 22
+                                                ; Else lowOfsset
 lowOffset:
        CMP    #4                ; 2
        BCC    endOffset         ; 2

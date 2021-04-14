@@ -383,6 +383,10 @@ in rom {
         a &= 0x1f;
         blockLine = a;
         blockLine >>>= 1;
+
+        /* If > 26 = lowoffset
+           If == 22 = nothing
+           Else = lowoffset
         
         // @CONTINUE
         if (a >= 26) {
