@@ -3,8 +3,106 @@ import "vcs";
 bank rom @ 0xF000 : [constdata; 4096];
 bank ram @ 0x80 : [vardata; 128];
 
-in ram {
 
+// C O N S T A N T S
+
+// Initial values for the random number generator:
+let SEED_LO         = 0x14;           // change "to go, where no one has gone before" :)
+let SEED_HI         = 0xA8;
+
+// Color constants:
+let BLACK           = 0x00;
+let GREY            = 0x06;
+let ORANGE          = 0x2A;
+// let   IF NTSC
+let YELLOW          = 0x1C;
+let RED             = 0x48;
+let BLUE            = 0x84;
+let CYAN            = 0xB0;
+let GREEN           = 0xD2;
+// let   ELSE
+// let YELLOW          = 0x2C
+// let RED             = 0x68
+// let BLUE            = 0xB4
+// let CYAN            = 0x70
+// let GREEN           = 0x52
+// let   ENDIF
+let DARK_RED        = RED    - 0x6;
+let LIGHT_GREEN     = GREEN  + 0x8;
+let BROWN           = YELLOW - 0xC;
+let LIGHT_GREY      = GREY   + 0x6;
+let DARK_BLUE       = BLUE   - 0x4;
+
+// ; main game constants:
+// NUM_BLOCKS      = 6             ; max. number of block on screen
+// SECTION_BLOCKS  = 16            ; number of blocks/stage
+// BLOCK_PARTS     = 2             ; each block has two parts
+// BLOCK_SIZE      = 32            ; number of lines/block
+// let NUM_LINES      = 160;           // number of lines in main kernel
+// MAX_LEVEL       = 48            ; number of difficulty levels
+
+// DIGIT_H         = 8             ; height of the score digits
+// let JET_Y           = 19;            // fixed y-position for jet
+// MIN_MISSILE     = JET_Y-6       ; starting position of player missile
+// MAX_MISSILE     = NUM_LINES+1
+// MISSILE_SPEED   = 6             ; y-speed of the jet missile
+// ROAD_HEIGHT     = 13            ; number of lines for road
+// INTRO_SCROLL    = 48            ; counter for scrolling into new game
+
+// SWITCH_PAGE_ID  = 9             ; first pattern id with data on different page
+
+// ; constants for shape-ids:
+// ID_EXPLOSION0   = 0             ; used for explosion end
+// ID_EXPLOSION1   = 1
+// ID_EXPLOSION2   = 2
+// ID_EXPLOSION3   = 3
+// ID_PLANE        = 4
+// ID_HELI0        = 5
+// ID_HELI1        = 6
+// ID_SHIP         = 7
+// ID_BRIDGE       = 8
+// ID_HOUSE        = 9
+// ID_FUEL         = 10
+
+// ; flags for blockLst:
+// PF1_PAGE_FLAG   = %00000001     ; pattern for PF1 in page $FC or $FD
+// PF2_PAGE_FLAG   = %00000010     ; pattern for PF1 in page $FC or $FD
+let PF_COLOR_FLAG  = 0b00000100;     // bright or dark green PF
+// PATROL_FLAG     = %00010000     ; enemy is patroling (change directions)
+// PF_COLLIDE_FLAG = %00100000     ; enemy collided with playfield
+// ENEMY_MOVE_FLAG = %01000000     ; enemy is moving
+// PF_ROAD_FLAG    = %10000000     ; display road and bridge
+
+// ; flags for State1Lst:
+// DIRECTION_FLAG  = %00001000     ; move direction of object
+// FINE_MASK       = %11110000     ; mask bits for HMxy
+// NUSIZ_MASK      = %00000111     ; mask bits for NUSIx
+
+// ; flags for PF_State:
+// ISLAND_FLAG     = %10000000     ; island displayed in block
+// CHANGE_FLAG     = %01000000     ; begin or end of island (JTZ: this interpretation might be wrong)
+
+// ; joystick bits:
+// MOVE_RIGHT      = %00001000
+// MOVE_LEFT       = %00000100
+// MOVE_DOWN       = %00000010
+// MOVE_UP         = %00000001
+
+// ; values for ENAxy:
+// DISABLE         = %00
+// ENABLE          = %10           ; value for enabling a missile
+
+// ; values for NUSIZx:
+// TWO_COPIES      = %001
+// THREE_COPIES    = %011
+// DOUBLE_SIZE     = %101
+// QUAD_SIZE       = %111
+
+// ; mask for SWCHB:
+// BW_MASK         = %1000         ; black and white bit
+
+
+in ram {
     // main game constants:
 
     let NUM_BLOCKS      = 6;
@@ -115,7 +213,7 @@ in ram {
     var sectionBlock @ 0xb9: u8;
     // pointer to the shape for the player jet
     // u16 ..$BB
-    var shapePtr0    @ 0xba: u8;
+    var shapePtr0    @ 0xba: *u8;
     // playfield pattern Id for the new generated block
     var PF1PatId     @ 0xbc: u8;
     //---------------------------------------
@@ -133,18 +231,18 @@ in ram {
     // 0 = running; -1 = game over; 1..48 = scroll into game
     var gameMode @ 0xC6: u8;
     // u16 ..$C8
-    var shapePtr1a @ 0xC7: u8;
+    var shapePtr1a @ 0xC7: *u8;
     // u16 ..$CA
-    var shapePtr1b @ 0xC9: u8;
+    var shapePtr1b @ 0xC9: *u8;
     // u16 ..$CC
-    var colorPtr @ 0xCB: u8;
+    var colorPtr @ 0xCB: *u8;
     // 12 bytes for the score display of current player
     // u16 ..$D8
     var scorePtr1 @ 0xCD: u8;
     // u16 ..$DA
-    var PF1Ptr @ 0xD9: u8;
+    var PF1Ptr @ 0xD9: *u8;
     // u16 ..$DC
-    var PF2Ptr @ 0xDB: u8;
+    var PF2Ptr @ 0xDB: *u8;
 
     //---------------------------------------
     var scorePtr2   @ 0xdd: [u8; 12];          // ..$E7         12 bytes for the score display of other player
@@ -366,13 +464,13 @@ in rom {
         y = Shape1IdLst[x];
         // @TODO: shapePtr1aTab
         x = (0xffc8 as *u8)[y];
-        shapePtr1a = x;
+        <:shapePtr1a = x;
         // @TODO: shapePtr1bTab, Y
         x = (0xfbbb as *u8)[y];
-        shapePtr1b = x;
+        <:shapePtr1b = x;
         // @TODO: ColorPtrTab
         x = (0xff23 as *u8)[y];
-        colorPtr = x;
+        <:colorPtr = x;
         vcs.collision.clear = a;
         vcs.hmove.clear = a;
 
@@ -384,23 +482,144 @@ in rom {
         blockLine = a;
         blockLine >>>= 1;
 
-        /* If > 26 = lowoffset
-           If == 22 = nothing
-           Else = lowoffset
-        
-        // @CONTINUE
-        if (a >= 26) {
-            a -#= 22;
-        } else {
-            a = 0x69;
-        }
-        // Low ofset
-        // else if (a >= 4) {
-        //     a &= 0b01;
-        //     a |= 0b10;
-        // }
+        goto lowOffset if (a < 26);
 
+        a -#= 22;
+        goto endOffset if (!zero);
+
+        lowOffset:
+            goto endOffset if (a < 4);
+            a &= 0b01;
+            a |= 0b10;
+
+        endOffset:
+
+        // Set entrypoint into kernel
         y = a;
+        // @TODO jmpHiTab
+        a = (0xfbef as *u8)[y];
+        push(a);
+        // @TODO jmpLoTab
+        a = (0xfdf6 as *u8)[y];
+        push(a);
+
+        // Prepare graphics for first line of kernel:
+        a = x;
+        a >>>= 1;
+        y = a;
+        a = *((shapePtr1a as u16 + y as u16) as *u8);
+        if (carry) {
+            a = *((shapePtr1b as u16 + y as u16) as *u8);
+        }
+
+        if (x < 26) {
+            if (x >= 3) {
+                vcs.pattern.player2 = a;
+                a = 0;
+                vcs.pattern.player1 = a;
+            }
+        }
+
+        a = *((PF1Ptr as u16 + y as u16) as *u8);
+        vcs.pattern.playfield2 = a;
+        a = *((PF2Ptr as u16 + y as u16) as *u8);
+        vcs.pattern.playfield3 = a;
+
+        a = *((colorPtr as u16 + y as u16) as *u8);
+
+        a ^= SS_XOR;
+        a &= SS_Mask;
+
+        vcs.color.player2 = a;
+        x = blockNum;
+        a = blockLst[x];
+        roadBlock = a; // Save road-state
+
+        a &= PF_COLOR_FLAG;
+        a |= GREEN;
+
+        a ^= SS_XOR;
+        a &= SS_Mask;
+
+        PFcolor[0] = a;
+
+        bit(blockLstEnd);
+        if (negative) {
+            if (y < ROAD_HEIGHT) {
+                // @TODO: roadColorTab
+                a = *((0xffb3 as u16 + y as u16) as *u8);
+
+                a ^= SS_XOR;
+                a &= SS_Mask;
+            }
+        }
+
+        vcs.color.fg = a;
+        y = NUM_LINES;
+        lineNum = y;
+
+        do {
+            a = vcs.timer.value;
+        } while !zero;
+
+        vcs.sync.wsync = a;
+        vcs.hmove.apply = a;
+        vcs.sync.vblank = a;
+    }
+
+    /**
+     * Main display kernel 
+     */
+    func displayKernel() {
+        // First some external code to save cycles in the kernel
+        lineNum++;
+        y = blockLine;
+
+        // @TODO enterKernel2
+        goto ((0xf189 as *u8) as func) if !negative;
+
+        // .skipJet0:
+        x = zero2;
+        // @TODO contJet0
+        goto ((0xf15d as *u8) as func) if zero;
+
+        // .noRoad
+        a = PFcolor[0];
+        // @TODO contPFColor
+        goto ((0xf168 as *u8) as func);
+
+        // .doJet0a:
+        a = *((shapePtr0 as u16 + y as u16) as *u8);
+        x = a;
+        a = 0;
+
+        // .loopKernel1:
+        // this jump is taken when comming from .doJet0a
+        // @TODO: contJet0a
+        goto ((0xf1a1 as *u8) as func) if zero;
+        // this jump is taken when comming from .loopkernel1
+        // @TODO: contKernel1
+        goto ((0xf155 as *u8) as func) if !zero;
+
+        // jmpPoint3:
+        // @TODO: wait12
+        ((0xfdf5 as *u8) as func)();
+
+        contKernel1:
+            nop();
+        
+        //--------------------------------------
+        // even line:
+        // - ...
+        // - draw player jet
+        // - load new P1 shape
+
+        // *** Here starts the main kernel loop:
+        loopKernel:
+        if (y < JET_Y) {
+            a = *((shapePtr0 as u16 + y as u16) as *u8);
+            x = a;
+        }
     }
 }
 
